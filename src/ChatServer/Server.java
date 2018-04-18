@@ -16,9 +16,36 @@
  */
 package ChatServer;
 
-import java.net.*;
-import java.io.*;
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Toolkit;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.PrintWriter;
+
 import java.net.InetAddress;
+import java.net.Socket;
+import java.net.ServerSocket;
+import java.net.UnknownHostException;
+import java.net.URL;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.UIManager;
+import javax.swing.UnsupportedLookAndFeelException;
+
+import javax.swing.UIManager.LookAndFeelInfo;
 
 /**
  * Server for Internet chat room
@@ -28,21 +55,39 @@ import java.net.InetAddress;
  */
 public class Server extends Thread {
 
-    private static Socket clients[]; //Create an array of Sockets to store all of the Client Sockets
-    private static String names[]; //Create an array of names to store all of the names of the Clients
-    private static String name; //A Variable to temporarly hold a name for the client
-    private static int client; //A Variable to temporarly hold a position in the client array
-    private static int portNumber; //The port to make the server on
-    private static int connections; //Number of Clients
-    private static final int DEFAULT_PORT = 22333; //Default Port
-    private static final int DEFAULT_CONNECTIONS = 1; //Default Connections
-    private static Thread threads[]; //array for threads for connection
-    private static String ipLocal; //storage for local ip
-    private static String ipPublic; //storage for public ip
-    private static ServerSocket connectionSocket; //socket to connect to client
+    private static final int DEFAULT_PORT = 22333;
+    private static final int DEFAULT_CONNECTION_NUM = 1;
+    
+    private static ActionEvent sendOverride;
+
+    private static BufferedReader fromClient;
+
+    private static int clientPos; //Client pos in array
+    private static int connectionNum;
+    private static int portNum;
+    
+    private static JButton jbtnSend; 
+    
+    private static JFrame jfrm;
+    
+    private static JTextArea jtaDisplay; 
+    
+    private static JScrollPane jscrlp; 
+    
+    private static JTextField jtfInput;
+
+    private static PrintWriter toClient;
+
+    private static ServerSocket connectionSocket;
+
+    private static Socket clients[];
+
+    private static String clientNames[];
+    private static String clientName;
+    private static String ipLocal;
+    private static String ipPublic;
+
     private static Thread threadArr[]; //array of client threads
-    private static PrintWriter toClient; //send to client
-    private static BufferedReader fromClient; //get from client
 
     /**
      * Constructor for client threads, tracked via name and number
@@ -51,84 +96,142 @@ public class Server extends Thread {
      * @param c
      */
     private Server(String n, int c) {
-        client = c;
-        name = n;
+        clientPos = c;
+        clientName = n;
     }
 
     /**
-     * Creates threads in terminal
+     * Creates threads
      *
      * @param args
      * @throws IOException
      */
     public static void main(String[] args) throws IOException {
+
         try {
             InetAddress localhost = InetAddress.getLocalHost();
             ipLocal = (localhost.getHostAddress()).trim();
         } catch (UnknownHostException hostErr) {
             System.err.println("Localhost not recognized, can't find IP!");
         }
-
-        URL whatismyip = new URL("http://checkip.amazonaws.com");
-        BufferedReader ipReader = new BufferedReader(new InputStreamReader(whatismyip.openStream()));
-        ipPublic = ipReader.readLine(); //you get the IP as a String
-
-        BufferedReader person = new BufferedReader(new InputStreamReader(System.in)); //Get input from Person
-
-        System.out.println("Port? (hit enter for default: " + DEFAULT_PORT + " )"); //Ask Question
-        String temp = person.readLine(); // Temp String for input
-        if (!temp.equals("")) { //If not enter, set port number to temp
-            portNumber = Integer.parseInt(temp);
-        } else { //If enter, set port number to default
-            portNumber = DEFAULT_PORT;
+        
+        try {
+            for (LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException exe) {
+            System.err.println("Nimbus unavailable");
         }
 
-        connectionSocket = new ServerSocket(portNumber);//Create Socket for Server to connect to clients
+        URL publicIP = new URL("http://checkip.amazonaws.com");
 
-        System.out.println("How many Connections (hit enter for default: " + DEFAULT_CONNECTIONS + " )"); //Ask Question
-        temp = person.readLine(); // Use same temp String for input
-        if (!temp.equals("")) { //If not enter, set connections to temp
-            connections = Integer.parseInt(temp);
-        } else { //If enter, set connections to deafult
-            connections = DEFAULT_CONNECTIONS;
+        BufferedReader ipReader = new BufferedReader(new InputStreamReader(publicIP.openStream()));
+
+        ipPublic = ipReader.readLine();
+        
+        jfrm = new JFrame("Chat Server");
+        jfrm.setLayout(new BorderLayout()); //sets layout based on borders
+        jfrm.setSize(500, 420); //sets size
+        
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize(); //gets screen dimensions
+        
+        double screenWidth = screenSize.getWidth(); //width of screen
+        double screenHeight = screenSize.getHeight(); //height of screen
+        
+        jfrm.setLocation((int) screenWidth / 2 - 250, (int) screenHeight / 2 - 210); //sets location of chat to center
+
+        jtaDisplay = new JTextArea(20, 30); //size of display
+        jtaDisplay.setEditable(false); //display not editable
+        jtaDisplay.setLineWrap(true); //lines wrap down
+        
+        jscrlp = new JScrollPane(jtaDisplay); //makes dispaly scrollable
+        
+        jtfInput = new JTextField(30); //sets character width of input field
+
+        jbtnSend = new JButton("Send"); //sets button text
+
+        jbtnSend.addActionListener(new handler()); //adds listener to button
+        
+        KeyListener key = new handler(); //adds handler for 'enter' key
+        
+        jtfInput.addKeyListener(key); //adds keylistener for 'enter'
+        jfrm.add(jscrlp, BorderLayout.PAGE_START); //adds scrollable display to main frame
+
+        sendOverride = new ActionEvent(jbtnSend, 1001, "Send"); //allows key to trigger same method as button
+
+        JPanel p1 = new JPanel(); //panel for input/button
+        
+        p1.setLayout(new FlowLayout()); //flow layout for input/button
+        p1.add(jtfInput, BorderLayout.LINE_END); //adds input to panel
+        p1.add(jbtnSend, BorderLayout.LINE_END); //adds button to panel
+
+        jfrm.add(p1, BorderLayout.PAGE_END); //add button/input to main frame
+
+        jfrm.setVisible(true); //makes frame visible
+
+        jfrm.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); //kills application on close
+
+        BufferedReader consoleInput = new BufferedReader(new InputStreamReader(System.in));
+
+        jtaDisplay.setText("Enter desired port (enter for default: " + DEFAULT_PORT + " )");
+
+        String temp = consoleInput.readLine();
+
+        if (temp.equals("")) {
+            portNum = DEFAULT_PORT;
+        } else {
+            portNum = Integer.parseInt(temp);
         }
 
-        clients = new Socket[connections]; //Set the array length of clients to the amount of connections
-        threadArr = new Thread[connections];//Create a thread array with the same size as the clients so
-        //each client has a Thread
-        names = new String[connections]; //Set the array length of names to the amount of connections
+        connectionSocket = new ServerSocket(portNum);
+
+        System.out.println("Number of connections(enter for default: " + DEFAULT_CONNECTION_NUM + " )");
+
+        temp = consoleInput.readLine();
+
+        if (temp.equals("")) {
+            connectionNum = DEFAULT_CONNECTION_NUM;
+        } else {
+            connectionNum = Integer.parseInt(temp);
+        }
+
+        clients = new Socket[connectionNum];
+        threadArr = new Thread[connectionNum];
+
+        clientNames = new String[connectionNum];
 
         System.out.println("Local IP: " + ipLocal);
         System.out.println("Public IP: " + ipPublic);
 
-        for (int i = 0; i < clients.length; i++) { //Loop through all the clients
+        for (int i = 0; i < clients.length; i++) {
             System.out.println("Waiting for connection...");
-            clients[i] = connectionSocket.accept(); //Wait for a client to connect and set a Socket in the array to
-            //the socket the client connected on
+
+            clients[i] = connectionSocket.accept();
+
             System.out.println("Connection found for Client: " + (i + 1));
 
-            //Sets a writer to print out to the client that just connected
             toClient = new PrintWriter(clients[i].getOutputStream(), true);
 
-            //Sets a reader to get input from the client that just connected
             fromClient = new BufferedReader(new InputStreamReader(clients[i].getInputStream()));
 
-            names[i] = fromClient.readLine(); //Sets the name at position i in the array to the name the clinet sends
-            for (int j = 0; j < names.length; j++) { //Loops through all the names
-                if (i != j) { //If the name is being checked is not the one that was just put in
-                    if (names[i].equals(names[j])) //If the current name is the same as another name
-                    {
-                        names[i] = names[i] + (i + 1); //Give it a the number of the client at the end
+            clientNames[i] = fromClient.readLine();
+            for (int j = 0; j < clientNames.length; j++) {
+                if (i != j) {
+                    if (clientNames[i].equals(clientNames[j])) {
+                        clientNames[i] = clientNames[i] + (i + 1);
                     }
                 }
             }
 
-            toClient.println(i + 1); //Send back the clients number
-            toClient.println("Welcome to the Chatroom! You are client " + (i + 1) + "!");
+            toClient.println(i + 1);
+            toClient.println("Welcome to the Chatroom, " + (clientNames[i]) + "!");
 
-            threadArr[i] = new Server(names[i], i); //Make a Thread using the postion in the array of the 
-            //client and the name of the client
-            threadArr[i].start(); //Start that Thread
+            threadArr[i] = new Server(clientNames[i], i);
+
+            threadArr[i].start();
         }
     }
 
@@ -137,63 +240,178 @@ public class Server extends Thread {
      */
     @Override
     public void run() {
-        int tClient = client; //A local variable for the thread that stores the client position in array
-        String tName = name; //A local variable for the thread that stores the client name
+        int currentClient = clientPos;
+        String tName = clientName;
 
-        try { //Try statement to catch errors from loosing contact with client.
-            fromClient = new BufferedReader(new InputStreamReader(clients[tClient].getInputStream()));
-            //Buffered Reader for taking input from the inputstream of the Socket connected to the client of the Thread.   
+        try {
+            fromClient = new BufferedReader(new InputStreamReader(clients[currentClient].getInputStream()));
 
-            String inputLine; //String to hold input from the client of the Thread
+            String inputLine;
             while (true) {
-                if ((inputLine = fromClient.readLine()) != null) { //Waits for input from client of Thread
-                    System.out.println("C:" + (tClient + 1) + " " + tName + ": " + inputLine);
-                    //Prints Input from Client of Thread.
-                    for (int i = 0; i < clients.length; i++) { //Loops through all clients
-                        if (clients[i] != null) { //If the client Exists
-                            toClient = new PrintWriter(clients[i].getOutputStream(), true);
-                            //Sets a writer to print out to all clients (because of the for loop)
+                if ((inputLine = fromClient.readLine()) != null) { //When input is detected
+                    System.out.println("C:" + (currentClient + 1) + " " + tName + ": " + inputLine);
 
-                            if (i != tClient) //Sends to all clients but the client of the thread
+                    for (int i = 0; i < clients.length; i++) {
+                        if (clients[i] != null) {
+                            toClient = new PrintWriter(clients[i].getOutputStream(), true);
+
+                            if (i != currentClient) //prevents sending own message back to client
                             {
-                                toClient.println(tName + ": " + inputLine); //Sends input
+                                toClient.println(tName + ": " + inputLine);
                             }
                         }
                     }
                 }
             }
-        } catch (IOException e) { //Catch a error
+        } catch (IOException e) { //If connection lost
             System.err.println("Client was stopped");
             try {
                 System.out.println("Waiting for connection...");
-                clients[tClient] = connectionSocket.accept(); //Wait for a client to connect and set a Socket in the array to
-                //the socket the client connected on
-                System.out.println("Connection found for Client: " + (tClient + 1));
+                clients[currentClient] = connectionSocket.accept();
+                System.out.println("Connection found for Client: " + (currentClient + 1));
 
-                toClient = new PrintWriter(clients[tClient].getOutputStream(), true);
-                //Sets a writer to print out to the client that just connected
+                toClient = new PrintWriter(clients[currentClient].getOutputStream(), true);
 
-                fromClient = new BufferedReader(new InputStreamReader(clients[tClient].getInputStream()));
-                //Sets a reader to get input from the client that just connected
+                fromClient = new BufferedReader(new InputStreamReader(clients[currentClient].getInputStream()));
 
-                names[tClient] = fromClient.readLine(); //Sets the name at position i in the array to the name the clinet sends
-                for (int j = 0; j < names.length; j++) { //Loops through all the names
-                    if (tClient != j) { //If the name is being checked is not the one that was just put in
-                        if (names[tClient].equals(names[j])) //If the current name is the same as another name
-                        {
-                            names[tClient] = names[tClient] + (tClient + 1); //Give it a the number of the client at the end
+                clientNames[currentClient] = fromClient.readLine();
+                for (int j = 0; j < clientNames.length; j++) {
+                    if (currentClient != j) {
+                        if (clientNames[currentClient].equals(clientNames[j])) {
+                            clientNames[currentClient] = clientNames[currentClient] + (currentClient + 1);
                         }
                     }
                 }
-                toClient.println(tClient + 1); //Send back the clients number
-                toClient.println("Welcome to the Chatroom! You are client " + (tClient + 1) + "!");
+                toClient.println(currentClient + 1);
+                toClient.println("Welcome to the Chatroom, " + clientNames[currentClient] + "!");
 
-                threads[tClient] = new Server(names[tClient], tClient); //Make a Thread using the postion in the array of the 
-                //client and the name of the client
-                threads[tClient].start(); //Start that Thread
+                threadArr[currentClient] = new Server(clientNames[currentClient], currentClient); 
+                
+                threadArr[currentClient].start();
             } catch (IOException io2) {
                 System.err.println("Client was stopped");
             }
+        }
+    }
+    /**
+     * Handles sending to server on button press
+     */
+    private static class handler implements ActionListener, KeyListener {
+
+        @Override
+        public void actionPerformed(ActionEvent ae) {
+            if (ae.getActionCommand().equals("Send")) {
+                sendCount++;
+
+                input = jtfInput.getText();
+
+                if (sendCount > 3) {
+                    if (sendCount == 4) {
+                        print = new Client(); //Create a Thread to run seperatly that is always looking to print incomming data to screen (see run() method).
+                        print.start(); //Start Thread
+                    }
+
+                    String userInput; //String for user's input
+
+                    if ((userInput = input) != null) { //If the userInput has characters(Triggers on enter key).  
+                        jtaDisplay.setText(jtaDisplay.getText() + "You: " + input + "\n");
+                        out.println(userInput); //Send the users message to server.
+                    }
+                } else if (sendCount == 1) {
+                    String hostInput;
+                    if ((hostInput = input) != null) {
+                        hostName = hostInput;
+                    }
+                    if (hostName.equals("")) { //If enter, set host name to deafult
+                        hostName = DEFAULT_HOSTNAME;
+                    }
+                    jtaDisplay.setText(jtaDisplay.getText() + "\nYou: " + input + "\n"); //displays input
+                    jfrm.repaint(); //repaints
+                    jtaDisplay.setText(jtaDisplay.getText() + "What is the Port? (hit enter for default: " + DEFAULT_PORT + " )\n"); //Ask Question
+                } else if (sendCount == 2) {
+                    String tempInput;
+                    if ((tempInput = input) != null) {
+                        if (!tempInput.equals("")) { //If not enter, set port number to temp
+                            tempInput = input;
+                            portNumber = Integer.parseInt(tempInput);
+                        } else {//If enter, set port number to deafult
+                            portNumber = DEFAULT_PORT;
+                        }
+                    }
+                    jtaDisplay.setText(jtaDisplay.getText() + "You: " + input + "\n");
+                    jfrm.repaint(); //repaints
+                    jtaDisplay.setText(jtaDisplay.getText() + "What do you want to be called? (hit enter for default: " + DEFAULT_CLIENTNAME + " )\n");
+                } else if (sendCount == 3) {
+                    String tempInput;
+                    if ((tempInput = input) != null) {
+                        if (!tempInput.equals("")) {//If not enter, set client name to temp
+                            clientName = tempInput;
+                        } else { //If enter, set client name to deafult
+                            clientName = DEFAULT_CLIENTNAME;
+                        }
+                        try {
+                            echoSocket = new Socket(hostName, portNumber); //Create Socket for Client to connect to Server
+                        } catch (UnknownHostException e) {
+                            System.err.println("No Host");
+                        } catch (IOException e) {
+                            System.err.println("No Input");
+                        }
+                    }
+                    jtaDisplay.setText(jtaDisplay.getText() + "You: " + input + "\n");
+                    jfrm.repaint();
+
+                    try {
+                        out = new PrintWriter(echoSocket.getOutputStream(), true); //Print Writer to send input over Socket to the Server.
+
+                        in = new BufferedReader(new InputStreamReader(echoSocket.getInputStream())); //Set Buffered Reader "in" to input from Socket
+
+                        out.println(clientName); //Send the name of the client to the server
+
+                        clientNumber = Integer.parseInt(in.readLine());       //The first data the server sends to the client
+                        jtaDisplay.setText(jtaDisplay.getText() + "Client number: " + clientNumber + "\n"); //is the position of the client in the server
+                        jtaDisplay.setText(jtaDisplay.getText() + "Client name: " + clientName + "\n");     //array of clients. 
+                        jtaDisplay.setText(jtaDisplay.getText() + in.readLine() + "\n"); //displays input from server
+                        jfrm.repaint();
+                    } catch (UnknownHostException uke) {
+                        System.err.println("Host DNE");
+                    } catch (IOException iexe) {
+                        System.err.println("Unrecognized input");
+                    }
+                    jfrm.repaint();
+                }
+                jtfInput.setText("");
+            }
+        }
+
+        /**
+         * Invokes handler for server communication
+         *
+         * @param e
+         */
+        @Override
+        public void keyPressed(KeyEvent e) //see comments from above
+        {
+            if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                actionPerformed(sendOverride);
+            }
+        }
+
+        /**
+         * Necessary override, does nothing
+         *
+         * @param e
+         */
+        @Override
+        public void keyReleased(KeyEvent e) {
+        }
+
+        /**
+         * Necessary override, does nothing
+         *
+         * @param e
+         */
+        @Override
+        public void keyTyped(KeyEvent e) {
         }
     }
 }
