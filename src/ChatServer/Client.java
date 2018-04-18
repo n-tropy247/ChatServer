@@ -53,26 +53,39 @@ import javax.swing.UIManager.LookAndFeelInfo;
  * @ver 2.0
  */
 public class Client extends Thread {
+    
+    private static final int DEFAULT_PORT = 22333; 
+    
+    private static final String DEFAULT_CLIENTNAME = "Unknown"; 
 
-    private static BufferedReader in; //Buffered Reader for taking input from the inputstream of the Socket, the Socket is what connects to the server
-    private static PrintWriter out; //For sending input to server
-    private static String hostName; //The IP Address of the machine running the Server
-    private static String clientName; //Name the user gives to the client
-    private static int portNumber; //The port for the server
-    private static int clientNumber; //The postion of the client in the array on the Server
-    private static final int DEFAULT_PORT = 22333; //Default Port
-    private static String DEFAULT_HOSTNAME; //Default Host Name
-    private static Socket echoSocket; //socket to connect to server
-    private static final String DEFAULT_CLIENTNAME = "Jeff"; //Default Host Name
-    private static String input; //user input
-    private static JTextArea jtaDisplay; //display for chatroom
-    private static JTextField jtfInput; //field for input
-    private static JButton jbtnSend; //send button
-    private static JScrollPane jscrlp; //scroll for chat
+    private static ActionEvent sendOverride;
+    
+    private static BufferedReader in; //inflow from server
+    
+    private static int clientNumber;
+    private static int portNumber; 
+    private static int sendCount = 0; 
+    
+    private static JButton jbtnSend; 
+    
+    private static JFrame jfrm;
+    
+    private static JTextArea jtaDisplay; 
+    
+    private static JScrollPane jscrlp; 
+    
+    private static JTextField jtfInput; 
+    
+    private static PrintWriter out; //outflow to server
+    
+    private static String clientName;
+    private static String DEFAULT_HOSTNAME; 
+    private static String hostName; 
+    private static String input; 
+    
+    private static Socket echoSocket; 
+    
     private static Thread print;
-    private static int sendCount = 0; //counter for sent msgs
-    private static JFrame jfrm; //container frame
-    private static ActionEvent sendOverride; //action event for pressing enter
 
     /**
      * For instantiating threads
@@ -104,12 +117,16 @@ public class Client extends Thread {
         } catch (ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException exe) {
             System.err.println("Nimbus unavailable");
         }
+        
         jfrm = new JFrame("Chatroom");
         jfrm.setLayout(new BorderLayout()); //sets layout based on borders
         jfrm.setSize(500, 420); //sets size
+        
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize(); //gets screen dimensions
+        
         double screenWidth = screenSize.getWidth(); //width of screen
         double screenHeight = screenSize.getHeight(); //height of screen
+        
         jfrm.setLocation((int) screenWidth / 2 - 250, (int) screenHeight / 2 - 210); //sets location of chat to center
 
         jtaDisplay = new JTextArea(20, 30); //size of display
@@ -123,13 +140,16 @@ public class Client extends Thread {
         jbtnSend = new JButton("Send"); //sets button text
 
         jbtnSend.addActionListener(new handler()); //adds listener to button
+        
         KeyListener key = new handler(); //adds handler for 'enter' key
+        
         jtfInput.addKeyListener(key); //adds keylistener for 'enter'
         jfrm.add(jscrlp, BorderLayout.PAGE_START); //adds scrollable display to main frame
 
         sendOverride = new ActionEvent(jbtnSend, 1001, "Send"); //allows key to trigger same method as button
 
         JPanel p1 = new JPanel(); //panel for input/button
+        
         p1.setLayout(new FlowLayout()); //flow layout for input/button
         p1.add(jtfInput, BorderLayout.LINE_END); //adds input to panel
         p1.add(jbtnSend, BorderLayout.LINE_END); //adds button to panel
