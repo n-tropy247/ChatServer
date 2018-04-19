@@ -195,7 +195,7 @@ public class Server extends Thread {
             String inputLine;
             while (true) {
                 if ((inputLine = fromClient.readLine()) != null) { //When input is detected
-                    jtaDisplay.setText(jtaDisplay.getText() + "C:" + (currentClient + 1) + " " + tName + ": " + inputLine);
+                    jtaDisplay.setText(jtaDisplay.getText() + tName + ": " + inputLine);
 
                     for (int i = 0; i < clients.length; i++) {
                         if (clients[i] != null) {
@@ -242,7 +242,6 @@ public class Server extends Thread {
     }
 
     private static void runThread() {
-        System.out.println("Thread entered");
         clients = new Socket[connectionNum];
         threadArr = new Thread[connectionNum];
         clientNames = new String[connectionNum];
@@ -254,7 +253,7 @@ public class Server extends Thread {
             try {
                 clients[i] = connectionSocket.accept();
 
-                jtaDisplay.setText(jtaDisplay.getText() + "Connection found for Client: " + (i + 1));
+                jtaDisplay.setText(jtaDisplay.getText() + "\nConnection found for Client: " + (i + 1));
 
                 toClient = new PrintWriter(clients[i].getOutputStream(), true);
 
@@ -282,7 +281,7 @@ public class Server extends Thread {
     }
 
     /**
-     * Handles sending to server on button press
+     * Handles passing variables on button press
      */
     private static class handler implements ActionListener, KeyListener {
 
@@ -329,15 +328,17 @@ public class Server extends Thread {
                         } else {
                             connectionNum = DEFAULT_CONNECTION_NUM;
                         }
-                        runThread();
                         jtaDisplay.setText(jtaDisplay.getText() + "\nYou: " + input);
+                        jtfInput.setText("");
                         jfrm.repaint();
+                        runThread();
                         break;
                     default:
                         break;
                 }
             }
             jtfInput.setText("");
+            jfrm.repaint();
         }
 
         /**
